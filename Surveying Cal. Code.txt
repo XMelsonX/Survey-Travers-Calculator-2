@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Professional Traverse Calculator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #0f172a; color: #f8fafc; }
+        input { background-color: #1e293b; border: 1px solid #334155; color: white; padding: 0.5rem; border-radius: 0.375rem; }
+        input:focus { outline: 2px solid #3b82f6; border-color: transparent; }
+    </style>
+</head>
+<body class="p-4 md:p-10">
+
+    <div class="max-w-5xl mx-auto">
+        <header class="mb-8">
+            <h1 class="text-3xl font-bold text-white">Traverse Calculator</h1>
+            <p class="text-slate-400">Calculate and adjust survey measurements with dynamic point entry.</p>
+        </header>
+
+        <section class="bg-slate-800/50 p-6 rounded-xl border border-slate-700 mb-6">
+            <h2 class="text-lg font-semibold mb-4 text-blue-400">Starting Point</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="flex flex-col">
+                    <label class="text-sm text-slate-400 mb-1">Northing</label>
+                    <input type="number" id="startN" value="5000" placeholder="0.000">
+                </div>
+                <div class="flex flex-col">
+                    <label class="text-sm text-slate-400 mb-1">Easting</label>
+                    <input type="number" id="startE" value="5000" placeholder="0.000">
+                </div>
+            </div>
+        </section>
+
+        <section class="bg-slate-800/50 p-6 rounded-xl border border-slate-700 mb-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-semibold text-blue-400">Traverse Points</h2>
+                <button onclick="addPoint()" class="bg-orange-600 hover:bg-orange-500 text-white px-4 py-2 rounded-lg text-sm font-bold transition">
+                    + Add Point
+                </button>
+            </div>
+            
+            <div id="pointsContainer" class="space-y-4">
+                </div>
+        </section>
+
+        <button onclick="calculateTraverse()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl shadow-lg transition mb-10">
+            Calculate Traverse & Coordinates
+        </button>
+
+        <div id="resultsArea" class="hidden">
+            <h2 class="text-2xl font-bold mb-4">Traverse Results</h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                <div class="bg-slate-800 p-4 rounded-lg border border-slate-700">
+                    <p class="text-slate-400 text-sm">Total Distance</p>
+                    <p id="resDist" class="text-xl font-mono text-white">0.00 m</p>
+                </div>
+                <div class="bg-slate-800 p-4 rounded-lg border border-slate-700">
+                    <p class="text-slate-400 text-sm">Linear Error</p>
+                    <p id="resError" class="text-xl font-mono text-white">0.00 m</p>
+                </div>
+                <div class="bg-slate-800 p-4 rounded-lg border border-slate-700">
+                    <p class="text-slate-400 text-sm">Precision</p>
+                    <p id="resPrecision" class="text-xl font-mono text-white">1 : 0</p>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto rounded-xl border border-slate-700">
+                <table class="w-full text-left bg-slate-900">
+                    <thead class="bg-slate-800 text-slate-300">
+                        <tr>
+                            <th class="p-4">Point ID</th>
+                            <th class="p-4">Northing</th>
+                            <th class="p-4">Easting</th>
+                            <th class="p-4">Description</th>
+                        </tr>
+                    </thead>
+                    <tbody id="coordTableBody" class="divide-y divide-slate-800">
+                        </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let pointCount = 0;
+
+        function addPoint() {
+            pointCount++;
+            const container = document.getElementById('pointsContainer');
+            const div = document.createElement('div');
+            div.className = "grid grid-cols-1 md:grid-cols-4 gap-4 p-4 bg-slate-900/50 rounded-lg border border-slate-700 items-end relative animate-in fade-in duration-300";
+            div.id = `point-row-${pointCount}`;
+            div.innerHTML = `
+                <div>
+                    <label class="block text-xs text-slate-500 mb-1">Point ID</label>
+                    <input type="text" placeholder="TR${pointCount}" class="w-full point-id">
+                </div>
+                <div>
+                    <label class="block text-xs text-slate-500 mb-1">Distance (m)</label>
+                    <input type="number" step="0.001" placeholder="0.000" class="w-full point-dist">
+                </div>
+                <div>
+                    <label class="block text-xs text-slate-500 mb-1">Bearing (Decimal Degrees)</label>
+                    <input type="number" step="0.00001" placeholder="e.g. 45.5" class="w-full point-bearing">
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="removePoint(${pointCount})" class="bg-red-900/30 hover:bg-red-800 text-red-400 p-2 rounded-lg w-full transition">Delete</button>
+                </div>
+            `;
+            container.appendChild(div);
+        }
+
+        function removePoint(id) {
+            document.getElementById(`point-row-${id}`).remove();
+        }
+
+        function calculateTraverse() {
+            const startN = parseFloat(document.getElementById('startN').value) || 0;
+            const startE = parseFloat(document.getElementById('startE').value) || 0;
+            
+            const dists = document.querySelectorAll('.point-dist');
+            const bearings = document.querySelectorAll('.point-bearing');
+            const ids = document.querySelectorAll('.point-id');
+
+            let currentN = startN;
+            let currentE = startE;
+            let totalDist = 0;
+            
+            const tableBody = document.getElementById('coordTableBody');
+            tableBody.innerHTML = `
+                <tr class="text-blue-300">
+                    <td class="p-4">START</td>
+                    <td class="p-4">${startN.toFixed(3)}</td>
+                    <td class="p-4">${startE.toFixed(3)}</td>
+                    <td class="p-4 text-xs">Initial Position</td>
+                </tr>
+            `;
+
+            dists.forEach((el, index) => {
+                const d = parseFloat(el.value) || 0;
+                const b = parseFloat(bearings[index].value) || 0;
+                const name = ids[index].value || `TR${index + 1}`;
+
+                if (d > 0) {
+                    const rad = b * (Math.PI / 180);
+                    const dN = d * Math.cos(rad);
+                    const dE = d * Math.sin(rad);
+
+                    currentN += dN;
+                    currentE += dE;
+                    totalDist += d;
+
+                    const row = `<tr>
+                        <td class="p-4 font-bold">${name}</td>
+                        <td class="p-4 font-mono">${currentN.toFixed(3)}</td>
+                        <td class="p-4 font-mono">${currentE.toFixed(3)}</td>
+                        <td class="p-4 text-slate-500 text-xs text-white">Traverse Point</td>
+                    </tr>`;
+                    tableBody.innerHTML += row;
+                }
+            });
+
+            // Update Stats
+            document.getElementById('resDist').innerText = `${totalDist.toFixed(2)} m`;
+            document.getElementById('resultsArea').classList.remove('hidden');
+            
+            // Auto-scroll to results
+            window.scrollTo({ top: document.getElementById('resultsArea').offsetTop, behavior: 'smooth' });
+        }
+
+        // Initialize with 3 points
+        for(let i=0; i<3; i++) addPoint();
+    </script>
+</body>
+</html>
